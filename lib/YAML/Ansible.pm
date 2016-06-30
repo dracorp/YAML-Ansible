@@ -4,6 +4,21 @@ use 5.006;
 use strict;
 use warnings;
 
+use Carp;
+use English qw( -no_match_vars );
+use Data::Dumper;
+use base qw(YAML);
+use Exporter qw(import);
+
+our %EXPORT_TAGS = (
+    all => [qw(
+        LoadFile
+        )],
+);
+
+# Symbol to export by default
+Exporter::export_tags('all');
+
 =head1 NAME
 
 YAML::Ansible - The great new YAML::Ansible!
@@ -16,7 +31,6 @@ Version 0.01
 
 our $VERSION = '0.01';
 
-
 =head1 SYNOPSIS
 
 Quick summary of what the module does.
@@ -25,42 +39,145 @@ Perhaps a little code snippet.
 
     use YAML::Ansible;
 
-    my $foo = YAML::Ansible->new();
-    ...
+    my $foo = YAML::Ansible->new('file.yaml');
+    $foo->getData(qw( path to variable ));
 
-=head1 EXPORT
 
-A list of functions that can be exported.  You can delete this section
-if you don't export anything, such as for a purely object-oriented module.
-
-=head1 SUBROUTINES/METHODS
-
-=head2 function1
+=head1 FUNCTIONS/METHODS
 
 =cut
 
-sub function1 {
+use fields
+    'data'
+;
+
+=pod
+
+=head2 new()
+
+Creates a new object of YAML::Ansible
+
+=cut
+
+sub new {
+    my $self = shift;
+    my ( $param ) = @ARG;
+    unless ( ref $self ) {
+        $self = fields::new($self);
+    }
+    if ( defined $param->{file} ) {
+        $self->LoadFile($param->{file});
+    }
+    return $self;
 }
 
-=head2 function2
+=pod
+
+=head2 LoadFile()
+
+Loads YAML file from given path and set B<data> field to hash structure.
 
 =cut
 
-sub function2 {
+sub LoadFile {
+    my ( $self, $file );
+    if ( ! ref $ARG[0] ) {
+        $file = shift;
+    }
+    else {
+        ( $self, $file ) = @ARG;
+    }
+    my $data = YAML::LoadFile($file);
+    if ( ref $self ) {
+        $self->{data} = $data;
+    }
+    else {
+        return $data;
+    }
+}
+
+=pod
+
+=head2 getData()
+
+Gets configuration for proper path hash reference which contains YAML configuration.
+If returned value is scalar and has $ then is evaluated.
+
+    $self->getData( qw(directory root linux) );
+    # returns $HOME/$HOSTNAME and it is evaluated to eg. /u/U537501/gdndevfc
+
+If returned value is ref to array then returns array (in list context).
+
+    my @airlines = $self->getData( 'airlines', $HOSTNAME );
+    # returns [ AF, AR, AV, CZ, AD ] for gdnvlnx75
+
+=cut
+
+sub getData {
+    my $self = shift;
+    my @param = @ARG;
+    my $ref = $self->{data};
+    # breadcrumbs
+    my $path = '';
+    foreach my $key ( @param ) {
+        $path = $path ? "$path->$key" : $key;
+        if ( exists $ref->{$key} ) {
+            $ref = $ref->{$key};
+        }
+        else {
+            print STDERR "Missing value in data for '$key' for full path: '$path'.\n";
+            return;
+        }
+    }
+
+
+    return $self->expandVariables($ref);
+}
+
+sub expandVariables {
+    my $self = shift;
+    my ( $ref ) = @ARG;
+
+    if ( ! ref $ref ) {
+        if ( my ( @vars ) = $ref =~ m/\{\{([^}]*)\}\}/g ) {
+            for my $var ( @vars ) {
+                $var =~ s/^\s*|\s$//mg;
+                my @path = ( $var );
+                if ( $var =~ m{/} ) {
+                    @path = split /\//, $var;
+                }
+                my $value = $self->getData(@path);
+                $ref =~ s/\{\{(\s*)$var(\s*)\}\}/$value/g;
+            }
+        }
+        if ( not defined wantarray ) {
+            $ARG[0] = $ref;
+        }
+        return $ref;
+    }
+    elsif ( ref $ref eq 'ARRAY' ) {
+        foreach my $element ( @{$ref} ) {
+            $self->expandVariables($element);
+        }
+        if ( wantarray ) {
+            return @{ $ref };
+        }
+        elsif ( defined wantarray ) {
+            return $ref;
+        }
+    }
+    elsif ( ref $ref eq 'HASH' ) {
+        for my $key ( keys %{$ref} ) {
+            $ref->{$key} = $self->expandVariables($ref->{$key});
+        }
+        return $ref;
+    }
+
 }
 
 =head1 AUTHOR
 
-Piotr Rogoza, C<< <piotr.rogoza at gmail.com> >>
-
-=head1 BUGS
-
-Please report any bugs or feature requests to C<bug-yaml-ansible at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=YAML-Ansible>.  I will be notified, and then you'll
-automatically be notified of progress on your bug as I make changes.
-
-
-
+Piotr Rogoza, C<< <piotr.rogoza at lhsystems.com> >>
 
 =head1 SUPPORT
 
@@ -68,74 +185,6 @@ You can find documentation for this module with the perldoc command.
 
     perldoc YAML::Ansible
 
-
-You can also look for information at:
-
-=over 4
-
-=item * RT: CPAN's request tracker (report bugs here)
-
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=YAML-Ansible>
-
-=item * AnnoCPAN: Annotated CPAN documentation
-
-L<http://annocpan.org/dist/YAML-Ansible>
-
-=item * CPAN Ratings
-
-L<http://cpanratings.perl.org/d/YAML-Ansible>
-
-=item * Search CPAN
-
-L<http://search.cpan.org/dist/YAML-Ansible/>
-
-=back
-
-
-=head1 ACKNOWLEDGEMENTS
-
-
-=head1 LICENSE AND COPYRIGHT
-
-Copyright 2016 Piotr Rogoza.
-
-This program is free software; you can redistribute it and/or modify it
-under the terms of the the Artistic License (2.0). You may obtain a
-copy of the full license at:
-
-L<http://www.perlfoundation.org/artistic_license_2_0>
-
-Any use, modification, and distribution of the Standard or Modified
-Versions is governed by this Artistic License. By using, modifying or
-distributing the Package, you accept this license. Do not use, modify,
-or distribute the Package, if you do not accept this license.
-
-If your Modified Version has been derived from a Modified Version made
-by someone other than you, you are nevertheless required to ensure that
-your Modified Version complies with the requirements of this license.
-
-This license does not grant you the right to use any trademark, service
-mark, tradename, or logo of the Copyright Holder.
-
-This license includes the non-exclusive, worldwide, free-of-charge
-patent license to make, have made, use, offer to sell, sell, import and
-otherwise transfer the Package with respect to any patent claims
-licensable by the Copyright Holder that are necessarily infringed by the
-Package. If you institute patent litigation (including a cross-claim or
-counterclaim) against any party alleging that the Package constitutes
-direct or contributory patent infringement, then this Artistic License
-to you shall terminate on the date that such litigation is filed.
-
-Disclaimer of Warranty: THE PACKAGE IS PROVIDED BY THE COPYRIGHT HOLDER
-AND CONTRIBUTORS "AS IS' AND WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES.
-THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
-PURPOSE, OR NON-INFRINGEMENT ARE DISCLAIMED TO THE EXTENT PERMITTED BY
-YOUR LOCAL LAW. UNLESS REQUIRED BY LAW, NO COPYRIGHT HOLDER OR
-CONTRIBUTOR WILL BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, OR
-CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE USE OF THE PACKAGE,
-EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
 =cut
 
-1; # End of YAML::Ansible
+1;
