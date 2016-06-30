@@ -139,6 +139,20 @@ sub expandVariables {
     my ( $ref ) = @ARG;
 
     if ( ! ref $ref ) {
+        if ( $ref =~ m/(\$\w+)/g ) {
+            $ref =~ s{
+                \$
+                (\w+)
+            }{
+                no strict 'refs';
+                if ( defined $ENV{$1} ) {
+                    $ENV{$1};
+                } else {
+                    "\$$1";
+                }
+
+            }egx;
+        }
         if ( my ( @vars ) = $ref =~ m/\{\{([^}]*)\}\}/g ) {
             for my $var ( @vars ) {
                 $var =~ s/^\s*|\s$//mg;
