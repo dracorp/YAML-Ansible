@@ -8,16 +8,21 @@ use Carp;
 use English qw( -no_match_vars );
 use Data::Dumper;
 use base qw(YAML);
+use YAML qw(LoadFile);
 use Exporter qw(import);
 
 our %EXPORT_TAGS = (
     all => [qw(
-        LoadFile
+        getData
+        LoadData
         )],
+    yaml => \@YAML::EXPORT_OK,
 );
 
+our @EXPORT_OK = ( @YAML::EXPORT_OK );
 # Symbol to export by default
 Exporter::export_tags('all');
+#Exporter::export_ok_tags('yaml');
 
 =head1 NAME
 
@@ -66,20 +71,20 @@ sub new {
         $self = fields::new($self);
     }
     if ( defined $param->{file} ) {
-        $self->LoadFile($param->{file});
+        $self->LoadData($param->{file});
     }
     return $self;
 }
 
 =pod
 
-=head2 LoadFile()
+=head2 LoadData()
 
 Loads YAML file from given path and set B<data> field to hash structure.
 
 =cut
 
-sub LoadFile {
+sub LoadData {
     my ( $self, $file );
     if ( ! ref $ARG[0] ) {
         $file = shift;
@@ -87,7 +92,7 @@ sub LoadFile {
     else {
         ( $self, $file ) = @ARG;
     }
-    my $data = YAML::LoadFile($file);
+    my $data = LoadFile($file);
     if ( ref $self ) {
         $self->{data} = $data;
     }
@@ -116,6 +121,12 @@ If returned value is ref to array then returns array (in list context).
 sub getData {
     my $self = shift;
     my @param = @ARG;
+    if ( ref $self ne __PACKAGE__ and ref $self eq 'HASH' ) {
+        my $tmp = __PACKAGE__->new();
+        $tmp->{data} = $self;
+        $self = $tmp;
+        undef $tmp;
+    }
     my $ref = $self->{data};
     # breadcrumbs
     my $path = '';
@@ -182,11 +193,29 @@ sub expandVariables {
     }
     elsif ( ref $ref eq 'HASH' ) {
         for my $key ( keys %{$ref} ) {
-            $ref->{$key} = $self->expandVariables($ref->{$key});
+            if ( not ref $ref->{$key} ) {
+                $ref->{$key} = $self->expandVariables($ref->{$key});
+            }
+            else { 
+                $self->expandVariables($ref->{$key});
+            }
         }
         return $ref;
     }
 
+}
+
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    my $sub = ( split /::/, $AUTOLOAD )[-1];
+#    my $mod = ( split /::([^:]+)$/, $AUTOLOAD )[0];
+    return if $sub eq 'DESTROY';
+    if ( YAML->can($sub) ) {
+        return YAML->can($sub)->(@ARG);
+    }
+    else {
+        print STDERR "Undefined subroutine $AUTOLOAD";
+    }
 }
 
 =head1 AUTHOR
