@@ -24,6 +24,10 @@ our @EXPORT_OK = ( @YAML::EXPORT_OK );
 Exporter::export_tags('all');
 #Exporter::export_ok_tags('yaml');
 
+use fields
+    'data'
+;
+
 =head1 NAME
 
 YAML::Ansible - The great new YAML::Ansible!
@@ -47,16 +51,13 @@ Perhaps a little code snippet.
     my $foo = YAML::Ansible->new('file.yaml');
     $foo->getData(qw( path to variable ));
 
+=head1 METHODS AND SUBROUTINES
 
-=head1 FUNCTIONS/METHODS
+There are a few subroutines which are exported, such as LoadData, getData. But you can also use I<YAML>'s subroutines, eg. DumpFile.
 
-=cut
+    use YAML::Ansible qw(DumpFile);
 
-use fields
-    'data'
-;
-
-=pod
+There are two tags for B<YAML::Ansible>: B<:all> and B<:yaml>. Tag B<:yaml:> export I<YAML> subroutines, and B<:all> export all B<YAML::Ansible> subroutines.
 
 =head2 new()
 
@@ -80,7 +81,7 @@ sub new {
 
 =head2 LoadData()
 
-Loads YAML file from given path and set B<data> field to hash structure.
+Loads YAML file from given path and set B<data> field to hash structure of yaml file.
 
 =cut
 
@@ -140,10 +141,16 @@ sub getData {
             return;
         }
     }
-
-
     return $self->expandVariables($ref);
 }
+
+=pod
+
+=head2 expandVariables()
+
+Expands Ansible variables from data. Ansible uses "{{ var }}" for variables. Method is recursive.
+
+=cut
 
 sub expandVariables {
     my $self = shift;
@@ -196,14 +203,25 @@ sub expandVariables {
             if ( not ref $ref->{$key} ) {
                 $ref->{$key} = $self->expandVariables($ref->{$key});
             }
-            else { 
+            else {
                 $self->expandVariables($ref->{$key});
             }
         }
         return $ref;
     }
-
 }
+
+=pod
+
+=head2 AUTOLOAD
+
+Autoloads missing subroutines for YAML package.
+
+    use YAML::Ansible qw(:all DumpFile)
+    ...
+    DumpFile('file.yaml',$yaml_stream);
+
+=cut
 
 sub AUTOLOAD {
     our $AUTOLOAD;
