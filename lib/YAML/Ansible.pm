@@ -96,7 +96,7 @@ There are two tags for I<YAML::Ansible>: I<:all> and I<:yaml>. Tag I<:yaml:> exp
 
 Creates a new object of YAML::Ansible. If a filepath is defined then function load data using I<LoadData> and sets I<data> field used by I<getData>.
 
-=cut 
+=cut
 
 sub new {
     my $self = shift;
@@ -176,6 +176,38 @@ sub getData {
         }
     }
     return $self->expandVariables($ref);
+}
+
+=head2 setData({ path => 'path as list', value => 'value' })
+
+Sets data for path and value.
+
+=cut
+
+sub setData {
+    my $self = shift;
+    if ( ref $self ne __PACKAGE__ and ref $self eq 'HASH' ) {
+        my $tmp = __PACKAGE__->new();
+        $tmp->{data} = $self;
+        $self = $tmp;
+        undef $tmp;
+    }
+    elsif ( ! ref $self ) {
+        print STDERR "The first parameter should be reference to hash.";
+        return;
+    }
+    my ( $param ) = @ARG;
+    my @path = @{$param->{path}};
+    my $value = $param->{value};
+    my $ref = $self->{data};
+    my $key = shift @path;
+#    my $breadcrumbs = $key;
+    while ( scalar @path > 0 ) {
+#        $breadcrumbs = "$path->$key";
+        $key = shift @path;
+        $ref = $ref->{$key}
+    }
+    $ref->{$key} = $value;
 }
 
 =pod
