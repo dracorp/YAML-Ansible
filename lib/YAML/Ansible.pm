@@ -22,7 +22,7 @@ our %EXPORT_TAGS = (
 our @EXPORT_OK = ( @YAML::EXPORT_OK );
 # Symbol to export by default
 Exporter::export_tags('all');
-#Exporter::export_ok_tags('yaml');
+Exporter::export_ok_tags('yaml');
 
 use fields
     'data'
@@ -42,14 +42,47 @@ our $VERSION = '0.01';
 
 =head1 SYNOPSIS
 
-Quick summary of what the module does.
-
-Perhaps a little code snippet.
-
     use YAML::Ansible;
 
     my $foo = YAML::Ansible->new('file.yaml');
     $foo->getData(qw( path to variable ));
+    # or in procedural way
+    my $conf = LoadData('file.yaml');
+    my $value = getData($conf, qw( path to variable ));
+
+=head1 DESCRIPTION
+
+The I<YAML::Ansible> module implements Ansible YAML and exactly Ansible variables. Ansible uses I<"{{ var }}"> for L<variables|http://docs.ansible.com/ansible/YAMLSyntax.html#gotchas>.
+You can use I<"{{ var }}"> and I<"{{ path/to/variable }}"> for nested variables:
+
+    ---
+    version: 1.0
+    name: foo
+    url: "http://foo.com/{{ name }}"
+    directory:
+        main
+            linux: $HOME/out
+            windows: c:\out
+        temp: tmp
+    destination: {{ directory/main/linux }}
+
+You can also use environment variables such as $HOME. Those variables will be expanded if defined. See L<perlvar>.
+
+=head1 GLOBAL OPTIONS
+
+The current options are:
+
+=over
+
+=item Expand
+
+Expand environemt variables from data. The default is 1.
+
+=back
+
+=cut
+
+our $Expand = 1;
 
 =head1 METHODS AND SUBROUTINES
 
@@ -57,13 +90,13 @@ There are a few subroutines which are exported, such as LoadData, getData. But y
 
     use YAML::Ansible qw(DumpFile);
 
-There are two tags for B<YAML::Ansible>: B<:all> and B<:yaml>. Tag B<:yaml:> export I<YAML> subroutines, and B<:all> export all B<YAML::Ansible> subroutines.
+There are two tags for I<YAML::Ansible>: I<:all> and I<:yaml>. Tag I<:yaml:> export L<YAML> subroutines, and I<:all> export all I<YAML::Ansible> subroutines.
 
-=head2 new()
+=head2 new({ file => filepath })
 
-Creates a new object of YAML::Ansible
+Creates a new object of YAML::Ansible. If a filepath is defined then function load data using I<LoadData> and sets I<data> field used by I<getData>.
 
-=cut
+=cut 
 
 sub new {
     my $self = shift;
@@ -79,9 +112,9 @@ sub new {
 
 =pod
 
-=head2 LoadData()
+=head2 LoadData(filepath)
 
-Loads YAML file from given path and set B<data> field to hash structure of yaml file.
+Reads the YAML file from given path and set I<data> field to hash structure of yaml file for OOP. In procedural way returns hash structure.
 
 =cut
 
@@ -100,22 +133,20 @@ sub LoadData {
     else {
         return $data;
     }
+    return;
 }
 
 =pod
 
-=head2 getData()
+=head2 getData('path as list')
 
 Gets configuration for proper path hash reference which contains YAML configuration.
 If returned value is scalar and has $ then is evaluated.
 
-    $self->getData( qw(directory root linux) );
-    # returns $HOME/$HOSTNAME and it is evaluated to eg. /u/U537501/gdndevfc
+    $self->getData( qw(directory main linux) );
+    # returns $HOME/out and it is evaluated to eg. /home/foo/out
 
 If returned value is ref to array then returns array (in list context).
-
-    my @airlines = $self->getData( 'airlines', $HOSTNAME );
-    # returns [ AF, AR, AV, CZ, AD ] for gdnvlnx75
 
 =cut
 
@@ -128,9 +159,12 @@ sub getData {
         $self = $tmp;
         undef $tmp;
     }
+    elsif ( ! ref $self ) {
+        print STDERR "The first parameter should be reference to hash.";
+        return;
+    }
     my $ref = $self->{data};
-    # breadcrumbs
-    my $path = '';
+    my $path = '';                              # breadcrumbs
     foreach my $key ( @param ) {
         $path = $path ? "$path->$key" : $key;
         if ( exists $ref->{$key} ) {
@@ -148,7 +182,8 @@ sub getData {
 
 =head2 expandVariables()
 
-Expands Ansible variables from data. Ansible uses "{{ var }}" for variables. Method is recursive.
+Expands Ansible variables from data. Ansible uses "{{ var }}" for variables. Method is recursive. Methods expands also environment variables if they are defined.
+As input could be scalar, ref to array or ref to hash.
 
 =cut
 
@@ -157,7 +192,7 @@ sub expandVariables {
     my ( $ref ) = @ARG;
 
     if ( ! ref $ref ) {
-        if ( $ref =~ m/(\$\w+)/g ) {
+        if ( $Expand and $ref =~ m/(\$\w+)/g ) {
             $ref =~ s{
                 \$
                 (\w+)
@@ -182,14 +217,11 @@ sub expandVariables {
                 $ref =~ s/\{\{(\s*)$var(\s*)\}\}/$value/g;
             }
         }
-        if ( not defined wantarray ) {
-            $ARG[0] = $ref;
-        }
         return $ref;
     }
     elsif ( ref $ref eq 'ARRAY' ) {
         foreach my $element ( @{$ref} ) {
-            $self->expandVariables($element);
+            $element = $self->expandVariables($element);
         }
         if ( wantarray ) {
             return @{ $ref };
@@ -209,6 +241,7 @@ sub expandVariables {
         }
         return $ref;
     }
+    return;
 }
 
 =pod
@@ -226,7 +259,6 @@ Autoloads missing subroutines for YAML package.
 sub AUTOLOAD {
     our $AUTOLOAD;
     my $sub = ( split /::/, $AUTOLOAD )[-1];
-#    my $mod = ( split /::([^:]+)$/, $AUTOLOAD )[0];
     return if $sub eq 'DESTROY';
     if ( YAML->can($sub) ) {
         return YAML->can($sub)->(@ARG);
@@ -234,11 +266,12 @@ sub AUTOLOAD {
     else {
         print STDERR "Undefined subroutine $AUTOLOAD";
     }
+    return;
 }
 
 =head1 AUTHOR
 
-Piotr Rogoza, C<< <piotr.rogoza at lhsystems.com> >>
+Piotr Rogoza, C<< <piotr.r.public at gmail.com> >>
 
 =head1 SUPPORT
 
