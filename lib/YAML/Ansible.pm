@@ -8,7 +8,6 @@ use Carp;
 use English qw( -no_match_vars );
 use Data::Dumper;
 use base qw(YAML);
-use YAML qw(LoadFile);
 use Exporter qw(import);
 
 our %EXPORT_TAGS = (
@@ -178,7 +177,7 @@ sub getData {
     return $self->expandVariables($ref);
 }
 
-=head2 setData({ path => 'path as list', value => 'value' })
+=head2 setData({ path => [ 'path as list' ], value => 'value' })
 
 Sets data for path and value.
 
