@@ -137,13 +137,20 @@ sub LoadData {
 
 =pod
 
-=head2 getData('path as list')
+=head2 getData( 'path as list', { ref hash of variables } )
 
-Gets configuration for proper path hash reference which contains YAML configuration.
-If returned value is scalar and has $ then is evaluated.
+Gets data from YAML data for proper path. If you want expand some variables then last parameter should be ref to hash and contains pairs variables and values.
+
+    ---
+    directory:
+        main:
+            linux: $HOME/out
+            windows: $var/out
+    ...
 
     $self->getData( qw(directory main linux) );
     # returns $HOME/out and it is evaluated to eg. /home/foo/out
+    $self->getData( qw(directory main windows), { var => $var }, );
 
 If returned value is ref to array then returns array (in list context).
 
@@ -152,6 +159,10 @@ If returned value is ref to array then returns array (in list context).
 sub getData {
     my $self = shift;
     my @param = @ARG;
+    my $variables;
+    if ( ref $param[-1] eq 'HASH' ) {
+        $variables = pop @param;
+    }
     if ( ref $self ne __PACKAGE__ and ref $self eq 'HASH' ) {
         my $tmp = __PACKAGE__->new();
         $tmp->{data} = $self;
@@ -174,7 +185,7 @@ sub getData {
             return;
         }
     }
-    return $self->expandVariables($ref);
+    return $self->_expandVariables($ref, $variables);
 }
 
 =head2 setData({ path => [ 'path as list' ], value => 'value' })
@@ -211,19 +222,38 @@ sub setData {
 
 =pod
 
-=head2 expandVariables()
+=head2 _expandVariables()
 
-Expands Ansible variables from data. Ansible uses "{{ var }}" for variables. Method is recursive. Methods expands also environment variables if they are defined.
+Expands variables from data. Ansible uses "{{ var }}" for variables. Method is recursive. Methods expands also environment variables if they are defined, such as B<$HOME>.
+You can also use $-kind variables in your YAML file.
+
+    ---
+    data:
+        directory: main/$var1/dest
+        url: http://foo.com/$var2
+    ...
+
+    my $var1 = 'foo';
+    my $var2 = 'foo2';
+    my $string = $config->getData(qw(data),  { var1 => $var1, var2 => $var2 } );
+
 As input could be scalar, ref to array or ref to hash.
 
 =cut
 
-sub expandVariables {
+sub _expandVariables {
     my $self = shift;
-    my ( $ref ) = @ARG;
-
+    my ( $ref, $variables ) = @ARG;
     if ( ! ref $ref ) {
-        if ( $Expand and $ref =~ m/(\$\w+)/g ) {
+        if ( $Expand and $ref =~ m/(\$\w+)/ ) {
+            if ( defined $variables ) {
+                for my $variable ( keys %{$variables} ) {
+                    my $value = $variables->{$variable};
+                    if ( $ref =~ m/\$\w+/g ) {
+                        $ref =~ s{\$$variable}{$value}g;
+                    }
+                }
+            }
             $ref =~ s{
                 \$
                 (\w+)
@@ -237,22 +267,22 @@ sub expandVariables {
 
             }egx;
         }
-        if ( my ( @vars ) = $ref =~ m/\{\{([^}]*)\}\}/g ) {
-            for my $var ( @vars ) {
-                $var =~ s/^\s*|\s$//mg;
-                my @path = ( $var );
-                if ( $var =~ m{/} ) {
-                    @path = split /\//, $var;
+        if ( my ( @variables ) = $ref =~ m/\{\{([^}]*)\}\}/g ) {
+            for my $variable ( @variables ) {
+                $variable =~ s/^\s*|\s$//mg;
+                my @path = ( $variable );
+                if ( $variable =~ m{/} ) {
+                    @path = split /\//, $variable;
                 }
                 my $value = $self->getData(@path);
-                $ref =~ s/\{\{(\s*)$var(\s*)\}\}/$value/g;
+                $ref =~ s/\{\{(\s*)$variable(\s*)\}\}/$value/g;
             }
         }
         return $ref;
     }
     elsif ( ref $ref eq 'ARRAY' ) {
         foreach my $element ( @{$ref} ) {
-            $element = $self->expandVariables($element);
+            $element = $self->_expandVariables( $element, $variables );
         }
         if ( wantarray ) {
             return @{ $ref };
@@ -264,10 +294,10 @@ sub expandVariables {
     elsif ( ref $ref eq 'HASH' ) {
         for my $key ( keys %{$ref} ) {
             if ( not ref $ref->{$key} ) {
-                $ref->{$key} = $self->expandVariables($ref->{$key});
+                $ref->{$key} = $self->_expandVariables( $ref->{$key}, $variables );
             }
             else {
-                $self->expandVariables($ref->{$key});
+                $self->_expandVariables( $ref->{$key}, $variables );
             }
         }
         return $ref;
