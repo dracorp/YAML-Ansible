@@ -170,7 +170,7 @@ sub getData {
         undef $tmp;
     }
     elsif ( ! ref $self ) {
-        print STDERR "The first parameter should be reference to hash.";
+        carp "The first parameter should be reference to hash.";
         return;
     }
     my $ref = $self->{data};
@@ -181,7 +181,7 @@ sub getData {
             $ref = $ref->{$key};
         }
         else {
-            print STDERR "Missing value in data for '$key' for full path: '$path'.\n";
+            carp "Missing value in data for '$key' for full path: '$path'.\n";
             return;
         }
     }
@@ -203,7 +203,7 @@ sub setData {
         undef $tmp;
     }
     elsif ( ! ref $self ) {
-        print STDERR "The first parameter should be reference to hash.";
+        carp "The first parameter should be reference to hash.";
         return;
     }
     my ( $param ) = @ARG;
@@ -325,7 +325,7 @@ sub AUTOLOAD {
         return YAML->can($sub)->(@ARG);
     }
     else {
-        print STDERR "Undefined subroutine $AUTOLOAD";
+        carp "Undefined subroutine $AUTOLOAD";
     }
     return;
 }
