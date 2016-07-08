@@ -75,14 +75,18 @@ The current options are:
 
 =item Expand
 
-Expand $-kind and environemt variables from data. The default is 1.
+Expand scalar and environemt variables from data. The default is 1.
+
+=item Silent
+
+Be silent is data for path not avaiable. The Default is 1.
 
 =back
 
 =cut
 
 our $Expand = 1;
-
+our $Silent = 1;
 
 =head1 METHODS AND SUBROUTINES
 
@@ -138,7 +142,7 @@ sub LoadData {
 
 =pod
 
-=head2 getData('path as list')
+=head2 getData( 'path as list', { ref hash of variables } )
 
 Gets data from YAML data for proper path. If you want expand some variables then last parameter should be ref to hash and contains pairs variables and values.
 
@@ -171,7 +175,7 @@ sub getData {
         undef $tmp;
     }
     elsif ( ! ref $self ) {
-        print STDERR "The first parameter should be reference to hash.";
+        carp "The first parameter should be reference to hash.";
         return;
     }
     my $ref = $self->{data};
@@ -182,7 +186,7 @@ sub getData {
             $ref = $ref->{$key};
         }
         else {
-            print STDERR "Missing value in data for '$key' for full path: '$path'.\n";
+            carp "The YAML value is not defined for '$path'.\n" unless $Silent;
             return;
         }
     }
@@ -204,7 +208,7 @@ sub setData {
         undef $tmp;
     }
     elsif ( ! ref $self ) {
-        print STDERR "The first parameter should be reference to hash.";
+        carp "The first parameter should be reference to hash.";
         return;
     }
     my ( $param ) = @ARG;
@@ -326,7 +330,7 @@ sub AUTOLOAD {
         return YAML->can($sub)->(@ARG);
     }
     else {
-        print STDERR "Undefined subroutine $AUTOLOAD";
+        carp "Undefined subroutine $AUTOLOAD";
     }
     return;
 }
