@@ -77,11 +77,16 @@ The current options are:
 
 Expand environemt variables from data. The default is 1.
 
+=item Silent
+
+Be silent is data for path not avaiable. The Default is 1.
+
 =back
 
 =cut
 
 our $Expand = 1;
+our $Silent = 1;
 
 =head1 METHODS AND SUBROUTINES
 
@@ -181,7 +186,7 @@ sub getData {
             $ref = $ref->{$key};
         }
         else {
-            carp "Missing value in data for '$key' for full path: '$path'.\n";
+            carp "The YAML value is not defined for '$path'.\n" unless $Silent;
             return;
         }
     }
