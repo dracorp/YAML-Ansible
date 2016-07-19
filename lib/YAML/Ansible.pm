@@ -182,7 +182,13 @@ sub getData {
     my $path = '';                              # breadcrumbs
     foreach my $key ( @param ) {
         $path = $path ? "$path->$key" : $key;
-        if ( exists $ref->{$key} ) {
+        if ( $key =~ m/^-?\d+/ 
+                and ref $ref eq 'ARRAY'
+                and defined $ref->[$key] ) {
+            $ref = $ref->[$key]
+        }
+        elsif ( ref $ref eq 'HASH'
+                and exists $ref->{$key} ) {
             $ref = $ref->{$key};
         }
         else {
@@ -216,9 +222,7 @@ sub setData {
     my $value = $param->{value};
     my $ref = $self->{data};
     my $key = shift @path;
-#    my $breadcrumbs = $key;
     while ( scalar @path > 0 ) {
-#        $breadcrumbs = "$path->$key";
         $key = shift @path;
         $ref = $ref->{$key}
     }
