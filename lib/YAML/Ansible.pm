@@ -75,7 +75,7 @@ The current options are:
 
 =item Expand
 
-Expand environemt variables from data. The default is 1.
+Expand scalar and environemt variables from data. The default is 1.
 
 =item Silent
 
@@ -94,7 +94,7 @@ There are a few subroutines which are exported, such as LoadData, getData. But y
 
     use YAML::Ansible qw(DumpFile);
 
-There are two tags for I<YAML::Ansible>: I<:all> and I<:yaml>. Tag I<:yaml:> export L<YAML> subroutines, and I<:all> export all I<YAML::Ansible> subroutines.
+There are two tags for I<YAML::Ansible>: I<:all> and I<:yaml>. Tag I<:yaml> export L<YAML> subroutines, and I<:all> export all I<YAML::Ansible> subroutines.
 
 =head2 new({ file => filepath })
 
@@ -119,6 +119,13 @@ sub new {
 =head2 LoadData(filepath)
 
 Reads the YAML file from given path and set I<data> field to hash structure of yaml file for OOP. In procedural way returns hash structure.
+
+    my $yaml = YAML::Ansible->new();
+    $yaml->LoadData($filepath);
+    #--or--
+    my $yaml = YAML::Ansible->new({ file => $filepath });
+    #--or--
+    my $data = LoadData($filepath);
 
 =cut
 
@@ -156,6 +163,9 @@ Gets data from YAML data for proper path. If you want expand some variables then
     $self->getData( qw(directory main linux) );
     # returns $HOME/out and it is evaluated to eg. /home/foo/out
     $self->getData( qw(directory main windows), { var => $var }, );
+    #--or--
+    my $data = LoadData($filepath);
+    my $value = getData( $data, qw(directory main windows), { var => $var } );
 
 If returned value is ref to array then returns array (in list context).
 
@@ -182,7 +192,13 @@ sub getData {
     my $path = '';                              # breadcrumbs
     foreach my $key ( @param ) {
         $path = $path ? "$path->$key" : $key;
-        if ( exists $ref->{$key} ) {
+        if ( $key =~ m/^-?\d+/
+                and ref $ref eq 'ARRAY'
+                and defined $ref->[$key] ) {
+            $ref = $ref->[$key]
+        }
+        elsif ( ref $ref eq 'HASH'
+                and exists $ref->{$key} ) {
             $ref = $ref->{$key};
         }
         else {
@@ -197,15 +213,22 @@ sub getData {
 
 Sets data for path and value.
 
+    my $yaml = YAML::Ansible->new({ file => $filepath });
+    $yaml->setData({ path => [ qw(path to node) ], value => $value });
+    #--or--
+    $data = setData( $data, { path => [ qw(path to node) ], value => $value });
+
 =cut
 
 sub setData {
     my $self = shift;
+    my $procedural = 0;
     if ( ref $self ne __PACKAGE__ and ref $self eq 'HASH' ) {
         my $tmp = __PACKAGE__->new();
         $tmp->{data} = $self;
         $self = $tmp;
         undef $tmp;
+        $procedural = 1;
     }
     elsif ( ! ref $self ) {
         carp "The first parameter should be reference to hash.";
@@ -216,13 +239,15 @@ sub setData {
     my $value = $param->{value};
     my $ref = $self->{data};
     my $key = shift @path;
-#    my $breadcrumbs = $key;
     while ( scalar @path > 0 ) {
-#        $breadcrumbs = "$path->$key";
         $key = shift @path;
         $ref = $ref->{$key}
     }
     $ref->{$key} = $value;
+    if ( $procedural == 1 ) {
+        return $self->{data};
+    }
+    return;
 }
 
 =pod
