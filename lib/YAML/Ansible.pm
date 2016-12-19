@@ -120,6 +120,13 @@ sub new {
 
 Reads the YAML file from given path and set I<data> field to hash structure of yaml file for OOP. In procedural way returns hash structure.
 
+    my $yaml = YAML::Ansible->new();
+    $yaml->LoadData($filepath);
+    #--or--
+    my $yaml = YAML::Ansible->new({ file => $filepath });
+    #--or--
+    my $data = LoadData($filepath);
+
 =cut
 
 sub LoadData {
@@ -156,6 +163,9 @@ Gets data from YAML data for proper path. If you want expand some variables then
     $self->getData( qw(directory main linux) );
     # returns $HOME/out and it is evaluated to eg. /home/foo/out
     $self->getData( qw(directory main windows), { var => $var }, );
+    #--or--
+    my $data = LoadData($filepath);
+    my $value = getData( $data, qw(directory main windows), { var => $var } );
 
 If returned value is ref to array then returns array (in list context).
 
@@ -182,7 +192,7 @@ sub getData {
     my $path = '';                              # breadcrumbs
     foreach my $key ( @param ) {
         $path = $path ? "$path->$key" : $key;
-        if ( $key =~ m/^-?\d+/ 
+        if ( $key =~ m/^-?\d+/
                 and ref $ref eq 'ARRAY'
                 and defined $ref->[$key] ) {
             $ref = $ref->[$key]
@@ -203,15 +213,22 @@ sub getData {
 
 Sets data for path and value.
 
+    my $yaml = YAML::Ansible->new({ file => $filepath });
+    $yaml->setData({ path => [ qw(path to node) ], value => $value });
+    #--or--
+    $data = setData( $data, { path => [ qw(path to node) ], value => $value });
+
 =cut
 
 sub setData {
     my $self = shift;
+    my $procedural = 0;
     if ( ref $self ne __PACKAGE__ and ref $self eq 'HASH' ) {
         my $tmp = __PACKAGE__->new();
         $tmp->{data} = $self;
         $self = $tmp;
         undef $tmp;
+        $procedural = 1;
     }
     elsif ( ! ref $self ) {
         carp "The first parameter should be reference to hash.";
@@ -227,6 +244,10 @@ sub setData {
         $ref = $ref->{$key}
     }
     $ref->{$key} = $value;
+    if ( $procedural == 1 ) {
+        return $self->{data};
+    }
+    return;
 }
 
 =pod
